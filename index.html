@@ -1,28 +1,35 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Wav-View</title>
+  <title>Wav-View Intelligence</title>
 
   <script src="https://cesium.com/downloads/cesiumjs/releases/1.140/Build/Cesium/Cesium.js"></script>
   <link href="https://cesium.com/downloads/cesiumjs/releases/1.140/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
 
   <style>
-    html, body {
-      margin: 0;
-      padding: 0;
+    html, body, #cesiumContainer {
       width: 100%;
       height: 100%;
-      overflow: hidden;
+      margin: 0;
       background: black;
     }
-    #cesiumContainer {
-      width: 100%;
-      height: 100vh;
+
+    #toggleBtn {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      z-index: 999;
+      padding: 8px;
+      background: #111;
+      color: white;
+      border: 1px solid #444;
     }
   </style>
 </head>
 
 <body>
+
+<button id="toggleBtn">Toggle Theme</button>
 <div id="cesiumContainer"></div>
 
 <script>
@@ -36,23 +43,35 @@ window.onload = function () {
     baseLayerPicker: false
   });
 
-  // 🌍 Map
-  viewer.imageryLayers.removeAll();
-  viewer.imageryLayers.addImageryProvider(
-    new Cesium.OpenStreetMapImageryProvider({
-      url: "https://a.tile.openstreetmap.org/"
-    })
-  );
+  // 🌑 DARK MAP
+  function setDark() {
+    viewer.imageryLayers.removeAll();
+    viewer.imageryLayers.addImageryProvider(
+      new Cesium.UrlTemplateImageryProvider({
+        url: "https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+      })
+    );
+  }
 
-  // 🇺🇸 Camera
-  viewer.camera.flyTo({
-    destination: Cesium.Cartesian3.fromDegrees(-98.5795, 39.8283, 2500000)
-  });
+  setDark();
 
   // =========================
-  // ✈️ FLIGHTS + TRAILS
+  // ✈️ FLIGHTS + LANDING DETECTION
   // =========================
   const flights = {};
+
+  const airports = [
+    { name: "ATL", lat: 33.6407, lon: -84.4277 },
+    { name: "LAX", lat: 33.9416, lon: -118.4085 },
+    { name: "JFK", lat: 40.6413, lon: -73.7781 }
+  ];
+
+  function nearAirport(lat, lon) {
+    return airports.find(a =>
+      Math.abs(a.lat - lat) < 0.5 &&
+      Math.abs(a.lon - lon) < 0.5
+    );
+  }
 
   function updateFlights() {
     fetch("http://localhost:3000/flights")
@@ -61,24 +80,33 @@ window.onload = function () {
 
         data.states.forEach(f => {
 
+          if (!f[5] || !f[6]) return;
+
           const id = f[0];
-          const position = Cesium.Cartesian3.fromDegrees(f[5], f[6], f[7]);
+          const lon = f[5];
+          const lat = f[6];
+          const alt = f[7] || 10000;
+
+          const pos = Cesium.Cartesian3.fromDegrees(lon, lat, alt);
 
           if (!flights[id]) {
 
             const entity = viewer.entities.add({
-              position,
+              position: pos,
               billboard: {
                 image: "https://img.icons8.com/ios-filled/50/00ffff/airplane-take-off.png",
-                scale: 0.8
+                scale: 0.7
               }
             });
 
             const trail = viewer.entities.add({
               polyline: {
                 positions: [],
-                width: 2,
-                material: Cesium.Color.CYAN
+                width: 3,
+                material: new Cesium.PolylineGlowMaterialProperty({
+                  glowPower: 0.3,
+                  color: Cesium.Color.CYAN
+                })
               }
             });
 
@@ -86,10 +114,19 @@ window.onload = function () {
           }
 
           const obj = flights[id];
-          obj.entity.position = position;
+          obj.entity.position = pos;
 
-          obj.path.push(position);
-          if (obj.path.length > 20) obj.path.shift();
+          // ✈️ LANDING DETECTION
+          const airport = nearAirport(lat, lon);
+          if (airport && alt < 2000) {
+            obj.entity.label = {
+              text: "Landing → " + airport.name,
+              fillColor: Cesium.Color.YELLOW
+            };
+          }
+
+          obj.path.push(pos);
+          if (obj.path.length > 25) obj.path.shift();
 
           obj.trail.polyline.positions = obj.path;
 
@@ -102,65 +139,58 @@ window.onload = function () {
   setInterval(updateFlights, 15000);
 
   // =========================
-  // 🛰️ MULTIPLE SATELLITES
+  // 🛰️ SATELLITES (NAMED)
   // =========================
-  for (let i = 0; i < 5; i++) {
-    let lon = -180 + (i * 60);
+  const satellites = [
+    { name: "ISS", lon: -100 },
+    { name: "Starlink-1", lon: -40 },
+    { name: "GPS IIF-3", lon: 60 }
+  ];
+
+  satellites.forEach(s => {
+    let lon = s.lon;
 
     const sat = viewer.entities.add({
       position: Cesium.Cartesian3.fromDegrees(lon, 0, 400000),
       billboard: {
         image: "https://img.icons8.com/ios-filled/50/ffffff/satellite.png",
         scale: 0.7
+      },
+      label: {
+        text: s.name,
+        fillColor: Cesium.Color.WHITE
       }
     });
 
     setInterval(() => {
-      lon += 0.3;
+      lon += 0.4;
       if (lon > 180) lon = -180;
       sat.position = Cesium.Cartesian3.fromDegrees(lon, 0, 400000);
     }, 100);
-  }
-
-  // =========================
-  // 🚢 SHIPS
-  // =========================
-  [
-    [-90, 29],
-    [-122, 37],
-    [-74, 40]
-  ].forEach(coord => {
-    viewer.entities.add({
-      position: Cesium.Cartesian3.fromDegrees(coord[0], coord[1]),
-      billboard: {
-        image: "https://img.icons8.com/ios-filled/50/00ff00/ship.png",
-        scale: 1.2
-      }
-    });
   });
 
   // =========================
-  // 🛫 AIRPORTS
+  // 📡 BGP OUTAGES
   // =========================
-  [
-    { name: "ATL", lon: -84.4277, lat: 33.6407 },
-    { name: "LAX", lon: -118.4085, lat: 33.9416 },
-    { name: "JFK", lon: -73.7781, lat: 40.6413 }
-  ].forEach(a => {
-    viewer.entities.add({
-      position: Cesium.Cartesian3.fromDegrees(a.lon, a.lat),
-      billboard: {
-        image: "https://img.icons8.com/ios-filled/50/ffffff/airport.png",
-        scale: 0.7
-      },
-      label: {
-        text: a.name,
-        fillColor: Cesium.Color.WHITE
-      }
+  fetch("http://localhost:3000/bgp")
+    .then(res => res.json())
+    .then(events => {
+
+      events.forEach(e => {
+        viewer.entities.add({
+          position: Cesium.Cartesian3.fromDegrees(e.lon, e.lat),
+          billboard: {
+            image: "https://img.icons8.com/ios-filled/50/ff0000/wifi-off.png",
+            scale: 0.7
+          },
+          description: "BGP Event: " + e.type
+        });
+      });
+
     });
-  });
 
 };
 </script>
+
 </body>
 </html>
