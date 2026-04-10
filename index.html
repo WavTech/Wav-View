@@ -33,92 +33,118 @@
       // 🔑 TOKEN
       Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiIyYjI2MjRiMC1kYzQ0LTQ1MjItYjJmZC1mMTQ2MTIyZTYwMjIiLCJpZCI6NDE2NTYyLCJpYXQiOjE3NzU4NDczNzN9.YwRL_qoLYSL8lQjPZE_ttVV9V5ORcungi-rNihZCRQ8';
 
-      try {
+      const viewer = new Cesium.Viewer('cesiumContainer', {
+        animation: false,
+        timeline: false,
+        baseLayerPicker: false
+      });
 
-        // 🌍 VIEWER (STABLE CONFIG)
-        const viewer = new Cesium.Viewer('cesiumContainer', {
-          animation: false,
-          timeline: false,
-          baseLayerPicker: false
-        });
+      // =========================
+      // 🗺️ MAP (OSM with labels)
+      // =========================
+      viewer.imageryLayers.removeAll();
+      viewer.imageryLayers.addImageryProvider(
+        new Cesium.OpenStreetMapImageryProvider({
+          url: "https://a.tile.openstreetmap.org/"
+        })
+      );
 
-        // 🇺🇸 CAMERA TO USA
-        viewer.camera.flyTo({
-          destination: Cesium.Cartesian3.fromDegrees(-98.5795, 39.8283, 2500000),
-          duration: 3
-        });
+      // =========================
+      // 🇺🇸 CAMERA
+      // =========================
+      viewer.camera.flyTo({
+        destination: Cesium.Cartesian3.fromDegrees(-98.5795, 39.8283, 2500000),
+        duration: 3
+      });
 
-        // =========================
-        // 🌎 EARTHQUAKES (LIVE)
-        // =========================
-        fetch("https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_hour.geojson")
-          .then(res => res.json())
-          .then(data => {
-            data.features.forEach(eq => {
-              const coords = eq.geometry.coordinates;
+      // =========================
+      // 🌎 EARTHQUAKES (ADVANCED)
+      // =========================
+      fetch("https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_hour.geojson")
+        .then(res => res.json())
+        .then(data => {
+          data.features.forEach(eq => {
+            const coords = eq.geometry.coordinates;
+            const props = eq.properties;
 
-              viewer.entities.add({
-                position: Cesium.Cartesian3.fromDegrees(coords[0], coords[1]),
-                point: {
-                  pixelSize: 6,
-                  color: Cesium.Color.YELLOW
-                },
-                description: eq.properties.place
-              });
+            const time = new Date(props.time).toLocaleString();
+
+            let color = Cesium.Color.YELLOW;
+            if (props.mag >= 5) color = Cesium.Color.ORANGE;
+            if (props.mag >= 6) color = Cesium.Color.RED;
+
+            viewer.entities.add({
+              position: Cesium.Cartesian3.fromDegrees(coords[0], coords[1]),
+              point: {
+                pixelSize: 8,
+                color: color
+              },
+              description: `
+                <b>🌎 Earthquake</b><br><br>
+                <b>Location:</b> ${props.place}<br>
+                <b>Magnitude:</b> ${props.mag}<br>
+                <b>Depth:</b> ${coords[2]} km<br>
+                <b>Time:</b> ${time}<br>
+                <b>Significance:</b> ${props.sig}<br>
+                <b>Tsunami Alert:</b> ${props.tsunami ? "Yes ⚠️" : "No"}
+              `
             });
           });
+        });
 
-        // =========================
-        // ✈️ FLIGHT (SMOOTH MOVEMENT)
-        // =========================
-        let lon = -120;
-        const flight = viewer.entities.add({
-          position: Cesium.Cartesian3.fromDegrees(lon, 35, 10000),
+      // =========================
+      // ✈️ AIRCRAFT
+      // =========================
+      let lon = -120;
+
+      const flight = viewer.entities.add({
+        position: Cesium.Cartesian3.fromDegrees(lon, 35, 10000),
+        point: {
+          pixelSize: 8,
+          color: Cesium.Color.CYAN
+        },
+        description: `
+          <b>Aircraft</b><br>
+          Altitude: 10,000 ft<br>
+          Status: En Route
+        `
+      });
+
+      setInterval(() => {
+        lon += 0.2;
+        flight.position = Cesium.Cartesian3.fromDegrees(lon, 35, 10000);
+      }, 200);
+
+      // =========================
+      // 🚢 SHIPS
+      // =========================
+      [
+        [-90, 29],
+        [-122, 37],
+        [-74, 40]
+      ].forEach((coord, i) => {
+        viewer.entities.add({
+          position: Cesium.Cartesian3.fromDegrees(coord[0], coord[1]),
           point: {
             pixelSize: 8,
-            color: Cesium.Color.CYAN
-          }
+            color: Cesium.Color.GREEN
+          },
+          description: `<b>Ship ${i + 1}</b><br>Status: Active`
         });
+      });
 
-        setInterval(() => {
-          lon += 0.2;
-          flight.position = Cesium.Cartesian3.fromDegrees(lon, 35, 10000);
-        }, 200);
-
-        // =========================
-        // 🚢 SHIPS (STATIC SAMPLE)
-        // =========================
-        [
-          [-90, 29],
-          [-122, 37],
-          [-74, 40]
-        ].forEach(coord => {
-          viewer.entities.add({
-            position: Cesium.Cartesian3.fromDegrees(coord[0], coord[1]),
-            point: {
-              pixelSize: 8,
-              color: Cesium.Color.GREEN
-            }
-          });
-        });
-
-        // =========================
-        // 🚗 TRAFFIC ZONE (CONGESTION)
-        // =========================
-        viewer.entities.add({
-          position: Cesium.Cartesian3.fromDegrees(-90.05, 35.15),
-          ellipse: {
-            semiMinorAxis: 3000,
-            semiMajorAxis: 3000,
-            material: Cesium.Color.RED.withAlpha(0.4)
-          }
-        });
-
-        console.log("All systems loaded");
-
-      } catch (error) {
-        console.error("Error:", error);
-      }
+      // =========================
+      // 🚗 TRAFFIC ZONE
+      // =========================
+      viewer.entities.add({
+        position: Cesium.Cartesian3.fromDegrees(-90.05, 35.15),
+        ellipse: {
+          semiMinorAxis: 3000,
+          semiMajorAxis: 3000,
+          material: Cesium.Color.RED.withAlpha(0.4)
+        },
+        description: `<b>Traffic Congestion</b><br>High traffic area`
+      });
 
     };
   </script>
