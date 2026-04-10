@@ -1,8 +1,9 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>World Eye</title>
+  <title>Wav-View</title>
 
+  <!-- Cesium JS -->
   <script src="https://cesium.com/downloads/cesiumjs/releases/1.140/Build/Cesium/Cesium.js"></script>
   <link href="https://cesium.com/downloads/cesiumjs/releases/1.140/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
 
@@ -13,6 +14,7 @@
       margin: 0;
       padding: 0;
       overflow: hidden;
+      background: black;
     }
   </style>
 </head>
@@ -24,26 +26,22 @@
     // 🔑 Your Cesium Token
     Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiIyYjI2MjRiMC1kYzQ0LTQ1MjItYjJmZC1mMTQ2MTIyZTYwMjIiLCJpZCI6NDE2NTYyLCJpYXQiOjE3NzU4NDczNzN9.YwRL_qoLYSL8lQjPZE_ttVV9V5ORcungi-rNihZCRQ8';
 
-    // 🌍 Create Globe
-    const viewer = new Cesium.Viewer('cesiumContainer');
+    window.onload = function () {
 
-    // 📍 Test Point (Memphis)
-    viewer.entities.add({
-      position: Cesium.Cartesian3.fromDegrees(-90.0490, 35.1495),
-      point: {
-        pixelSize: 12,
-        color: Cesium.Color.RED
-      }
-    });
+      // 🌍 Create Viewer
+      const viewer = new Cesium.Viewer('cesiumContainer', {
+        terrainProvider: Cesium.createWorldTerrain(),
+        animation: false,
+        timeline: false
+      });
 
-    // ✈️ Example: Add another point (New York)
-    viewer.entities.add({
-      position: Cesium.Cartesian3.fromDegrees(-74.0060, 40.7128),
-      point: {
-        pixelSize: 10,
-        color: Cesium.Color.BLUE
-      }
-    });
+      // 🇺🇸 Fly camera to USA
+      viewer.camera.flyTo({
+        destination: Cesium.Cartesian3.fromDegrees(-98.5795, 39.8283, 2500000),
+        duration: 3
+      });
+
+    };
   </script>
 </body>
 </html>
